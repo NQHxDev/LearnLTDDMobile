@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/utils/validators.dart';
+import '../../../../core/widgets/appearance_settings_modal.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_text_field.dart';
 import '../../data/models/device_model.dart';
@@ -200,10 +202,7 @@ class _DeviceFormScreenState extends State<DeviceFormScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: AppColors.error,
-          content: Text(e.toString()),
-        ),
+        SnackBar(backgroundColor: AppColors.error, content: Text(e.toString())),
       );
     } finally {
       if (mounted) {
@@ -223,6 +222,13 @@ class _DeviceFormScreenState extends State<DeviceFormScreen> {
               ? 'Chỉnh sửa sản phẩm #${_editingDevice!.id}'
               : 'Thêm sản phẩm mới',
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.palette_rounded),
+            tooltip: 'Đổi màu nền Mobile',
+            onPressed: () => AppearanceSettingsModal.show(context),
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -233,7 +239,10 @@ class _DeviceFormScreenState extends State<DeviceFormScreen> {
             children: [
               if (_isEditMode && allDevices.length > 1) ...[
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.primary.withAlpha(15),
                     borderRadius: BorderRadius.circular(12),
@@ -245,7 +254,10 @@ class _DeviceFormScreenState extends State<DeviceFormScreen> {
                           ? _editingDevice!.id
                           : null,
                       isExpanded: true,
-                      icon: const Icon(Icons.swap_horiz_rounded, color: AppColors.primary),
+                      icon: const Icon(
+                        Icons.swap_horiz_rounded,
+                        color: AppColors.primary,
+                      ),
                       hint: const Text('Đổi nhanh sản phẩm cần chỉnh sửa'),
                       items: allDevices.map((item) {
                         return DropdownMenuItem<int>(
@@ -420,7 +432,8 @@ class _DeviceFormScreenState extends State<DeviceFormScreen> {
                 label: 'Giá bán (VNĐ)',
                 icon: Icons.payments_outlined,
                 keyboardType: TextInputType.number,
-                validator: (val) => Validators.nonNegativeNumber(val, 'Giá bán'),
+                validator: (val) =>
+                    Validators.nonNegativeNumber(val, 'Giá bán'),
               ),
               const SizedBox(height: 12),
               AppTextField(
@@ -483,31 +496,45 @@ class _DeviceFormScreenState extends State<DeviceFormScreen> {
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: Colors.grey.shade300),
                   ),
-                  child: SwitchListTile(
-                    value: _isAvailable,
-                    activeThumbColor: AppColors.primary,
-                    title: const Text(
-                      'Trạng thái kinh doanh (Mở bán sản phẩm)',
-                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                    ),
-                    subtitle: Text(
-                      _isAvailable
-                          ? 'Đang mở bán trên hệ thống'
-                          : 'Tạm ngừng kinh doanh / Ẩn sản phẩm',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: _isAvailable ? AppColors.success : AppColors.error,
+                  child: Material(
+                    color: Colors.transparent,
+                    borderRadius: BorderRadius.circular(12),
+                    clipBehavior: Clip.antiAlias,
+                    child: SwitchListTile(
+                      value: _isAvailable,
+                      activeThumbColor: AppColors.primary,
+                      title: const Text(
+                        'Trạng thái kinh doanh (Mở bán sản phẩm)',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
                       ),
+                      subtitle: Text(
+                        _isAvailable
+                            ? 'Đang mở bán trên hệ thống'
+                            : 'Tạm ngừng kinh doanh / Ẩn sản phẩm',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: _isAvailable
+                              ? AppColors.success
+                              : AppColors.error,
+                        ),
+                      ),
+                      onChanged: (val) => setState(() => _isAvailable = val),
                     ),
-                    onChanged: (val) => setState(() => _isAvailable = val),
                   ),
                 ),
               ],
               const SizedBox(height: 24),
               AppButton(
-                text: _isEditMode ? 'Lưu cập nhật sản phẩm' : 'Tạo sản phẩm mới',
+                text: _isEditMode
+                    ? 'Lưu cập nhật sản phẩm'
+                    : 'Tạo sản phẩm mới',
                 loading: _loading,
-                icon: _isEditMode ? Icons.check_circle_rounded : Icons.save_rounded,
+                icon: _isEditMode
+                    ? Icons.check_circle_rounded
+                    : Icons.save_rounded,
                 onPressed: _submit,
               ),
             ],

@@ -1,3 +1,5 @@
+rootProject.name = "NguyenQuangHung"
+
 pluginManagement {
     val flutterSdkPath =
         run {

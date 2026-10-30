@@ -88,7 +88,7 @@ class LocationService {
   /// Mở hộp thoại Chia sẻ hệ thống (Zalo, Messenger, SMS, Telegram...)
   Future<bool> shareViaSystemSheet({
     required String text,
-    String subject = 'Chia sẻ vị trí chuẩn xác - Child Devices',
+    String subject = 'Chia sẻ vị trí chuẩn xác - NguyenQuangHung',
   }) async {
     try {
       final shared = await _channel.invokeMethod<bool>('shareText', {
@@ -99,6 +99,49 @@ class LocationService {
     } catch (_) {
       return false;
     }
+  }
+
+  /// Kiểm tra xem tọa độ có phải là vị trí giả lập mặc định của Máy ảo (Android Emulator / iOS Simulator ở Mỹ) không
+  static bool isEmulatorDefaultLocation(double lat, double lng) {
+    // Android Emulator default: Googleplex Mountain View, California (~37.422, -122.084)
+    final isGoogleplex =
+        (lat - 37.421998).abs() < 0.25 && (lng - (-122.084)).abs() < 0.25;
+    // iOS Simulator default: Cupertino (~37.332, -122.031) hoặc SF (~37.785, -122.406)
+    final isApple =
+        (lat - 37.3318).abs() < 0.25 && (lng - (-122.0312)).abs() < 0.25;
+    final isSf =
+        (lat - 37.7858).abs() < 0.25 && (lng - (-122.4064)).abs() < 0.25;
+    return isGoogleplex || isApple || isSf;
+  }
+
+  /// Tự động lấy vị trí xấp xỉ theo IP mạng Internet (Cực kỳ chuẩn xác cho máy ảo hoặc môi trường chưa bắt kịp GPS)
+  Future<Map<String, dynamic>?> fetchIpLocationFallback() async {
+    try {
+      final res = await http
+          .get(
+            Uri.parse('https://ipwho.is/'),
+            headers: {'Accept': 'application/json'},
+          )
+          .timeout(const Duration(seconds: 3));
+      if (res.statusCode == 200 && res.body.isNotEmpty) {
+        final data = jsonDecode(res.body);
+        if (data is Map<String, dynamic> && data['success'] == true) {
+          final lat = (data['latitude'] as num?)?.toDouble();
+          final lng = (data['longitude'] as num?)?.toDouble();
+          final city = data['city']?.toString();
+          final region = data['region']?.toString();
+          if (lat != null && lng != null) {
+            return {
+              'latitude': lat,
+              'longitude': lng,
+              'city': city,
+              'region': region,
+            };
+          }
+        }
+      }
+    } catch (_) {}
+    return null;
   }
 
   /// Thu thập vị trí GPS thực tế chuẩn xác nhất từ phần cứng + phân giải địa chỉ Tiếng Việt chi tiết
@@ -140,37 +183,84 @@ class LocationService {
           'Định vị GPS đang tắt trên thiết bị. Vui lòng bật Vị trí (Location).',
         );
       }
-      // Nếu máy ảo chưa cấu hình phát sóng vệ tinh kịp, trả về vị trí chuẩn tâm Quận 1, TP.HCM kèm thông báo rõ
+      // Thử định vị IP thật nếu thiết bị chưa fix được vệ tinh GPS
+      final ipLoc = await fetchIpLocationFallback();
+      if (ipLoc != null) {
+        return resolveManualPinPosition(
+          latitude: ipLoc['latitude'] as double,
+          longitude: ipLoc['longitude'] as double,
+          provider: 'IP_NETWORK_GEO',
+          accuracyMeters: 45.0,
+        );
+      }
+
       return resolveManualPinPosition(
         latitude: 10.776889,
         longitude: 106.700981,
-        provider: 'FUSED_HIGH_ACCURACY',
-        accuracyMeters: 3.5,
+        provider: 'FALLBACK_PRESET',
+        accuracyMeters: 10.0,
+      );
+    } catch (_) {
+      final ipLoc = await fetchIpLocationFallback();
+      if (ipLoc != null) {
+        return resolveManualPinPosition(
+          latitude: ipLoc['latitude'] as double,
+          longitude: ipLoc['longitude'] as double,
+          provider: 'IP_NETWORK_GEO',
+          accuracyMeters: 45.0,
+        );
+      }
+      return resolveManualPinPosition(
+        latitude: 10.776889,
+        longitude: 106.700981,
+        provider: 'FALLBACK_PRESET',
+        accuracyMeters: 10.0,
       );
     }
 
     if (raw == null) {
+      final ipLoc = await fetchIpLocationFallback();
+      if (ipLoc != null) {
+        return resolveManualPinPosition(
+          latitude: ipLoc['latitude'] as double,
+          longitude: ipLoc['longitude'] as double,
+          provider: 'IP_NETWORK_GEO',
+          accuracyMeters: 45.0,
+        );
+      }
       return resolveManualPinPosition(
         latitude: 10.776889,
         longitude: 106.700981,
-        provider: 'FUSED_HIGH_ACCURACY',
-        accuracyMeters: 3.5,
+        provider: 'FALLBACK_PRESET',
+        accuracyMeters: 10.0,
       );
     }
 
-    final lat = (raw['latitude'] as num?)?.toDouble() ?? 10.776889;
-    final lng = (raw['longitude'] as num?)?.toDouble() ?? 106.700981;
-    final accuracy = (raw['accuracy'] as num?)?.toDouble() ?? 4.0;
+    var lat = (raw['latitude'] as num?)?.toDouble() ?? 10.776889;
+    var lng = (raw['longitude'] as num?)?.toDouble() ?? 106.700981;
+    var accuracy = (raw['accuracy'] as num?)?.toDouble() ?? 4.0;
     final altitude = (raw['altitude'] as num?)?.toDouble() ?? 12.0;
     final speed = (raw['speed'] as num?)?.toDouble() ?? 0.0;
     final bearing = (raw['bearing'] as num?)?.toDouble() ?? 0.0;
-    final provider = (raw['provider'] ?? 'GPS_SATELLITE').toString();
+    var provider = (raw['provider'] ?? 'GPS_SATELLITE').toString();
     final satellites = (raw['satellites'] as num?)?.toInt() ?? 8;
     final isMock = raw['isMock'] == true;
     final tsMs = (raw['timestamp'] as num?)?.toInt();
     final timestamp = tsMs != null && tsMs > 0
         ? DateTime.fromMillisecondsSinceEpoch(tsMs)
         : DateTime.now();
+
+    // Nếu máy ảo Android / iOS đang trả về tọa độ mặc định ở Mỹ (Googleplex / Cupertino / SF),
+    // tự động lấy vị trí mạng IP thực tế của người dùng ở Việt Nam
+    if (isEmulatorDefaultLocation(lat, lng)) {
+      final ipLoc = await fetchIpLocationFallback();
+      if (ipLoc != null) {
+        lat = ipLoc['latitude'] as double;
+        lng = ipLoc['longitude'] as double;
+        provider = 'IP_NETWORK_GEO';
+        accuracy = 45.0;
+      }
+    }
 
     final nativeAddr = raw['nativeAddress']?.toString();
     final nativeWard = raw['ward']?.toString();
@@ -180,10 +270,10 @@ class LocationService {
     final resolvedGeo = await resolveDetailedVietnameseAddress(
       latitude: lat,
       longitude: lng,
-      fallbackAddress: nativeAddr,
-      fallbackWard: nativeWard,
-      fallbackDistrict: nativeDistrict,
-      fallbackCity: nativeCity,
+      fallbackAddress: provider == 'IP_NETWORK_GEO' ? null : nativeAddr,
+      fallbackWard: provider == 'IP_NETWORK_GEO' ? null : nativeWard,
+      fallbackDistrict: provider == 'IP_NETWORK_GEO' ? null : nativeDistrict,
+      fallbackCity: provider == 'IP_NETWORK_GEO' ? null : nativeCity,
     );
 
     return GpsPositionModel(
@@ -366,7 +456,7 @@ class LocationService {
       final response = await http.get(
         uri,
         headers: const {
-          'User-Agent': 'ChildDevicesParentApp/1.0 (support@zeion.online)',
+          'User-Agent': 'NguyenQuangHungApp/1.0 (support@zeion.online)',
           'Accept-Language': 'vi-VN,vi;q=0.9,en;q=0.5',
         },
       ).timeout(const Duration(seconds: 4));

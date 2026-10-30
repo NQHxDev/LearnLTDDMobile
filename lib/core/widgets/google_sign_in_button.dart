@@ -311,7 +311,7 @@ class _GoogleAccountPickerSheetState extends State<_GoogleAccountPickerSheet> {
                 ),
                 const SizedBox(height: 4),
                 const Text(
-                  'để tiếp tục tới Child Devices',
+                  'để tiếp tục tới NguyenQuangHung',
                   style: TextStyle(
                     fontSize: 13.5,
                     color: AppColors.textSecondary,

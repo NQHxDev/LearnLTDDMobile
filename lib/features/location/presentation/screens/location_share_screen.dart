@@ -218,6 +218,7 @@ class _LocationShareScreenState extends State<LocationShareScreen> {
       // Kiểm tra nếu máy ảo Android đang trả về tọa độ mặc định Googleplex Mountain View (Mỹ: 37.421998, -122.084)
       final isEmulatorDefaultUsa = (pos.latitude - 37.421998).abs() < 0.05 &&
           (pos.longitude - (-122.084)).abs() < 0.05;
+      final isIpFallback = pos.provider.contains('IP_NETWORK');
 
       setState(() {
         _currentPosition = pos;
@@ -225,9 +226,11 @@ class _LocationShareScreenState extends State<LocationShareScreen> {
         _kidLocations = _kidLocations
             .map((k) => k.withDistanceToUser(pos.latitude, pos.longitude))
             .toList();
-        _statusBannerMessage = isEmulatorDefaultUsa
-            ? 'Đã lấy GPS từ thiết bị (±${pos.accuracyMeters.toStringAsFixed(1)}m). Máy ảo đang để GPS mặc định tại Mỹ — bạn có thể chạm mốc Việt Nam bên dưới hoặc chạm bản đồ để ghim!'
-            : 'Đã khóa vị trí GPS chuẩn xác (±${pos.accuracyMeters.toStringAsFixed(1)}m) • ${pos.address}';
+        _statusBannerMessage = isIpFallback
+            ? 'Đã tự động lấy vị trí theo mạng Internet (IP) của bạn • ${pos.address}. (Nếu dùng Máy ảo, bạn có thể chỉnh tọa độ trong Extended Controls hoặc chạm bản đồ để ghim đúng nhà mình)'
+            : (isEmulatorDefaultUsa
+                ? 'Đã lấy GPS từ thiết bị (±${pos.accuracyMeters.toStringAsFixed(1)}m). Máy ảo đang để GPS mặc định tại Mỹ — bạn có thể chạm mốc Việt Nam bên dưới hoặc chạm bản đồ để ghim!'
+                : 'Đã khóa vị trí GPS chuẩn xác (±${pos.accuracyMeters.toStringAsFixed(1)}m) • ${pos.address}');
         _isErrorBanner = false;
       });
     } catch (e) {
@@ -763,26 +766,37 @@ class _LocationShareScreenState extends State<LocationShareScreen> {
         label: '📡 GPS Vệ Tinh Thật',
         lat: null,
         lng: null,
+        isIp: false,
       ),
       (
-        label: '📍 Quận 1, TP.HCM',
-        lat: 10.776889,
-        lng: 106.700981,
-      ),
-      (
-        label: '📍 Trường Chu Văn An',
-        lat: 10.779150,
-        lng: 106.699420,
+        label: '🌐 Dò theo IP Mạng',
+        lat: null,
+        lng: null,
+        isIp: true,
       ),
       (
         label: '📍 Hoàn Kiếm, Hà Nội',
         lat: 21.028511,
         lng: 105.854444,
+        isIp: false,
+      ),
+      (
+        label: '📍 Quận 1, TP.HCM',
+        lat: 10.776889,
+        lng: 106.700981,
+        isIp: false,
       ),
       (
         label: '📍 Hải Châu, Đà Nẵng',
         lat: 16.054407,
         lng: 108.202167,
+        isIp: false,
+      ),
+      (
+        label: '📍 Trường Chu Văn An',
+        lat: 10.779150,
+        lng: 106.699420,
+        isIp: false,
       ),
     ];
 
@@ -790,31 +804,54 @@ class _LocationShareScreenState extends State<LocationShareScreen> {
       scrollDirection: Axis.horizontal,
       child: Row(
         children: presets.map((item) {
-          final isHardware = item.lat == null;
+          final isHardware = item.lat == null && !item.isIp;
+          final isIp = item.isIp;
           return Padding(
             padding: const EdgeInsets.only(right: 8),
             child: ActionChip(
-              backgroundColor:
-                  isHardware ? const Color(0xFFEFF6FF) : Colors.white,
+              backgroundColor: isHardware
+                  ? const Color(0xFFEFF6FF)
+                  : (isIp ? const Color(0xFFECFDF5) : Colors.white),
               side: BorderSide(
                 color: isHardware
                     ? const Color(0xFF2563EB)
-                    : const Color(0xFFE2E8F0),
+                    : (isIp ? const Color(0xFF10B981) : const Color(0xFFE2E8F0)),
               ),
               label: Text(
                 item.label,
                 style: TextStyle(
                   fontSize: 11.5,
                   fontWeight:
-                      isHardware ? FontWeight.bold : FontWeight.w500,
+                      (isHardware || isIp) ? FontWeight.bold : FontWeight.w500,
                   color: isHardware
                       ? const Color(0xFF1D4ED8)
-                      : AppColors.textPrimary,
+                      : (isIp ? const Color(0xFF047857) : AppColors.textPrimary),
                 ),
               ),
-              onPressed: () {
+              onPressed: () async {
                 if (isHardware) {
                   _refreshHardwareGps(silent: false);
+                } else if (item.isIp) {
+                  setState(() {
+                    _isAcquiringGps = true;
+                    _statusBannerMessage =
+                        'Đang dò tìm vị trí theo IP mạng Internet của bạn...';
+                    _isErrorBanner = false;
+                  });
+                  final ipLoc =
+                      await _locationService.fetchIpLocationFallback();
+                  if (ipLoc != null && mounted) {
+                    await _handleMapPinCalibrated(
+                      Offset(ipLoc['latitude'], ipLoc['longitude']),
+                    );
+                  } else if (mounted) {
+                    setState(() {
+                      _isAcquiringGps = false;
+                      _statusBannerMessage =
+                          'Không thể xác định vị trí qua IP mạng. Bạn có thể chọn mốc tỉnh/thành hoặc chạm bản đồ để ghim.';
+                      _isErrorBanner = true;
+                    });
+                  }
                 } else {
                   _handleMapPinCalibrated(Offset(item.lat!, item.lng!));
                 }

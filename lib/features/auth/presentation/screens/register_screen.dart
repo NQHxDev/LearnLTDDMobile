@@ -663,7 +663,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               const SizedBox(width: 8),
               const Expanded(
                 child: Text(
-                  'Tôi đồng ý với Điều khoản sử dụng và Chính sách bảo mật của Child Devices.',
+                  'Tôi đồng ý với Điều khoản sử dụng và Chính sách bảo mật của NguyenQuangHung.',
                   style: TextStyle(
                     fontSize: 12.5,
                     color: AppColors.textSecondary,

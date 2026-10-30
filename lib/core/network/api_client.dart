@@ -17,12 +17,18 @@ class ApiClient {
         baseUrl = baseUrl ?? AppConstants.baseUrl;
 
   List<String> get _candidateBaseUrls {
+    if (AppConstants.isProduction) {
+      final urls = <String>[
+        ?_workingBaseUrl,
+        baseUrl,
+      ];
+      return urls.toSet().toList();
+    }
+
     final urls = <String>[
       ?_workingBaseUrl,
       baseUrl,
-      'http://10.0.2.2:5057/api',
-      'http://localhost:5057/api',
-      'http://127.0.0.1:5057/api',
+      ...AppConstants.devFallbackUrls,
     ];
     return urls.toSet().toList();
   }
@@ -68,7 +74,11 @@ class ApiClient {
 
     for (var i = 0; i < candidates.length; i++) {
       final candidate = candidates[i];
-      final timeoutDuration = i == 0 && _workingBaseUrl == null
+      final isLocalCandidate = candidate.contains('localhost') ||
+          candidate.contains('127.0.0.1') ||
+          candidate.contains('10.0.2.2') ||
+          candidate.contains('192.168.');
+      final timeoutDuration = isLocalCandidate && _workingBaseUrl == null
           ? const Duration(seconds: 4)
           : const Duration(seconds: AppConstants.requestTimeoutSeconds);
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/widgets/appearance_settings_modal.dart';
 import '../../../../core/widgets/confirm_dialog.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../../data/models/device_model.dart';
@@ -93,6 +94,11 @@ class _DevicesScreenState extends State<DevicesScreen> {
       appBar: AppBar(
         title: const Text('Danh sách thiết bị'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.palette_rounded),
+            tooltip: 'Đổi màu nền Mobile',
+            onPressed: () => AppearanceSettingsModal.show(context),
+          ),
           if (isAdmin)
             IconButton(
               icon: const Icon(Icons.add_rounded),

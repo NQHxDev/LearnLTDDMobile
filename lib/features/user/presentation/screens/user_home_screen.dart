@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/widgets/appearance_settings_modal.dart';
 import '../../../../core/widgets/confirm_dialog.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
+import '../../../auth/presentation/screens/edit_profile_screen.dart';
 import '../../../auth/presentation/screens/login_screen.dart';
 import '../../../device/data/models/device_model.dart';
 import '../../../device/presentation/controllers/device_controller.dart';
@@ -47,7 +49,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     final confirmed = await ConfirmDialog.show(
       context: context,
       title: 'Đăng xuất tài khoản',
-      content: 'Bạn có chắc chắn muốn đăng xuất khỏi ứng dụng Child Devices?',
+      content: 'Bạn có chắc chắn muốn đăng xuất khỏi ứng dụng NguyenQuangHung?',
       confirmText: 'Đăng xuất',
     );
 
@@ -239,7 +241,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: _buildUserAppBar(),
       body: IndexedStack(
         index: _currentIndex,
@@ -329,6 +331,11 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
               ),
             ],
           ),
+        ),
+        IconButton(
+          tooltip: 'Cỡ chữ & Màu nền ứng dụng',
+          icon: const Icon(Icons.format_size_rounded, color: Color(0xFF2563EB)),
+          onPressed: () => AppearanceSettingsModal.show(context),
         ),
         IconButton(
           tooltip: 'Chia sẻ vị trí GPS chuẩn xác',
@@ -1222,9 +1229,22 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      user?.email ?? 'phuhuynh@childdevices.vn',
+                      user?.email ?? 'phuhuynh@nguyenquanghung.vn',
                       style: const TextStyle(color: AppColors.textSecondary, fontSize: 12.5),
                     ),
+                    if (user?.phoneNumber != null && user!.phoneNumber!.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          const Icon(Icons.phone_outlined, size: 13, color: AppColors.textSecondary),
+                          const SizedBox(width: 4),
+                          Text(
+                            user.phoneNumber!,
+                            style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 4),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -1242,6 +1262,49 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                       ),
                     ),
                   ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.edit_note_rounded, color: Color(0xFF2563EB), size: 26),
+                tooltip: 'Sửa đổi hồ sơ cá nhân',
+                onPressed: () async {
+                  final updated = await EditProfileScreen.navigate(context, widget.authController);
+                  if (updated == true && mounted) {
+                    setState(() {});
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // Cài đặt cá nhân & tài khoản
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Tài khoản & Hồ sơ',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+              const SizedBox(height: 12),
+              InkWell(
+                onTap: () async {
+                  final updated = await EditProfileScreen.navigate(context, widget.authController);
+                  if (updated == true && mounted) {
+                    setState(() {});
+                  }
+                },
+                child: _buildParentSettingTile(
+                  Icons.manage_accounts_outlined,
+                  'Chỉnh sửa hồ sơ cá nhân & Đổi mật khẩu (API Server)',
                 ),
               ),
             ],
@@ -1272,6 +1335,13 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                 child: _buildParentSettingTile(
                   Icons.share_location_rounded,
                   'Chia sẻ vị trí GPS chuẩn xác & Hành trình Live (Chức năng User)',
+                ),
+              ),
+              InkWell(
+                onTap: () => AppearanceSettingsModal.show(context),
+                child: _buildParentSettingTile(
+                  Icons.palette_outlined,
+                  'Cỡ chữ & Màu nền ứng dụng (Độc lập hệ điều hành)',
                 ),
               ),
               InkWell(

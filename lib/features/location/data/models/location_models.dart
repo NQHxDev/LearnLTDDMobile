@@ -128,7 +128,7 @@ class GpsPositionModel {
     buffer.writeln(
       isLive
           ? '📍 [CHIA SẺ VỊ TRÍ TRỰC TIẾP - LIVE GPS]'
-          : '📍 [CHIA SẺ VỊ TRÍ CHUẨN XÁC - CHILD DEVICES]',
+          : '📍 [CHIA SẺ VỊ TRÍ CHUẨN XÁC - NGUYENQUANGHUNG]',
     );
     buffer.writeln('👤 Người chia sẻ: $userName (Vai trò: USER)');
     buffer.writeln('👨‍👩‍👧‍👦 Gửi tới: $recipientTarget');

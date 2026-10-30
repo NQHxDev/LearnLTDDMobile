@@ -1,12 +1,14 @@
 class ApiEndpoints {
   // Auth endpoints
   static const String login = '/Auth/login';
+  static const String biometricLogin = '/Auth/biometric-login';
   static const String register = '/Auth/register';
   static const String googleAuth = '/Auth/google';
   static const String sendOtp = '/Auth/send-otp';
   static const String sendLoginOtp = '/Auth/send-login-otp';
   static const String verifyOtp = '/Auth/verify-otp';
   static const String me = '/Auth/me';
+  static const String updateProfile = '/Auth/profile';
   static const String users = '/Auth/users';
   static String updateUserRole(int userId) => '/Auth/users/$userId/role';
 

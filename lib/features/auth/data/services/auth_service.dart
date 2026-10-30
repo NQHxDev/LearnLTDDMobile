@@ -73,6 +73,107 @@ class AuthService {
       userId: user.id,
       email: user.email,
       role: user.role,
+      fullName: user.fullName,
+    );
+
+    return user;
+  }
+
+  /// Đăng nhập nhanh bằng vân tay / sinh trắc học (bỏ qua OTP và mật khẩu)
+  Future<User> loginWithBiometrics({
+    required String email,
+  }) async {
+    final cleanEmail = email.trim().toLowerCase();
+
+    if (!cleanEmail.contains('@')) {
+      throw const ApiException(400, 'Địa chỉ Email không hợp lệ');
+    }
+
+    try {
+      final response = await apiClient.post(
+        ApiEndpoints.biometricLogin,
+        body: {
+          'email': cleanEmail,
+        },
+      );
+
+      final data = response['data'];
+      final token = data['token'] as String;
+      var user = User.fromJson(data['user']);
+
+      if (_builtInAccounts.containsKey(cleanEmail)) {
+        user = user.copyWith(role: _builtInAccounts[cleanEmail]!.role);
+      } else if (user.role.trim().isEmpty) {
+        user = user.copyWith(role: UserRoleType.user.label);
+      }
+
+      await storageService.saveAuth(
+        token: token,
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        fullName: user.fullName,
+      );
+
+      return user;
+    } on ApiException catch (e) {
+      if (e.statusCode == 401 || e.statusCode == 404) {
+        // Nếu server từ chối vì tài khoản không tồn tại hoặc bị khóa
+        if (!_builtInAccounts.containsKey(cleanEmail)) {
+          rethrow;
+        }
+      }
+      return _fallbackLocalBiometricSession(cleanEmail);
+    } catch (_) {
+      return _fallbackLocalBiometricSession(cleanEmail);
+    }
+  }
+
+  Future<User> _fallbackLocalBiometricSession(String cleanEmail) async {
+    if (_builtInAccounts.containsKey(cleanEmail)) {
+      final acc = _builtInAccounts[cleanEmail]!;
+      final user = User(
+        id: acc.id,
+        email: cleanEmail,
+        fullName: acc.fullName,
+        role: acc.role,
+        createdAt: DateTime.now(),
+      );
+      final token = await storageService.getBiometricToken() ??
+          'biometric_token_${user.id}';
+      await storageService.saveAuth(
+        token: token,
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        fullName: user.fullName,
+      );
+      return user;
+    }
+
+    final savedUserId = await storageService.getBiometricUserId() ?? 1;
+    final savedRole = await storageService.getBiometricRole() ??
+        UserRoleType.user.label;
+    final savedFullName = await storageService.getBiometricFullName() ??
+        cleanEmail.split('@').first;
+
+    final user = User(
+      id: savedUserId,
+      email: cleanEmail,
+      fullName: savedFullName,
+      role: savedRole,
+      createdAt: DateTime.now(),
+    );
+
+    final token = await storageService.getBiometricToken() ??
+        'biometric_session_${user.id}';
+
+    await storageService.saveAuth(
+      token: token,
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+      fullName: user.fullName,
     );
 
     return user;
@@ -118,6 +219,7 @@ class AuthService {
         userId: user.id,
         email: user.email,
         role: user.role,
+        fullName: user.fullName,
       );
 
       return (user: user, isNewUser: isNewUser);
@@ -154,6 +256,7 @@ class AuthService {
       userId: user.id,
       email: cleanEmail,
       role: user.role,
+      fullName: user.fullName,
     );
 
     return (user: user, isNewUser: false);
@@ -258,6 +361,7 @@ class AuthService {
       userId: user.id,
       email: user.email,
       role: user.role,
+      fullName: user.fullName,
     );
 
     return user;
@@ -292,6 +396,51 @@ class AuthService {
       // Hỗ trợ fallback cục bộ nếu server chưa phản hồi
     }
     return null;
+  }
+
+  /// Sửa đổi thông tin hồ sơ cá nhân và đổi mật khẩu trên Server
+  Future<User> updateProfile({
+    required String fullName,
+    String? phoneNumber,
+    String? currentPassword,
+    String? newPassword,
+  }) async {
+    final cleanFullName = fullName.trim();
+    if (cleanFullName.isEmpty) {
+      throw const ApiException(400, 'Họ và tên không được để trống');
+    }
+
+    final payload = <String, dynamic>{
+      'fullName': cleanFullName,
+      'phoneNumber': (phoneNumber != null && phoneNumber.trim().isNotEmpty)
+          ? phoneNumber.trim()
+          : null,
+      if (currentPassword != null && currentPassword.isNotEmpty)
+        'currentPassword': currentPassword,
+      if (newPassword != null && newPassword.isNotEmpty)
+        'newPassword': newPassword,
+    };
+
+    final response = await apiClient.put(
+      ApiEndpoints.updateProfile,
+      body: payload,
+      auth: true,
+    );
+
+    final data = response['data'];
+    if (data is! Map<String, dynamic>) {
+      throw const ApiException(500, 'Dữ liệu phản hồi từ máy chủ không hợp lệ');
+    }
+
+    final updatedUser = User.fromJson(data);
+    final newToken = data['token']?.toString();
+
+    await storageService.updateStoredProfile(
+      fullName: updatedUser.fullName,
+      token: newToken,
+    );
+
+    return updatedUser;
   }
 
   /// Lấy thông tin user hiện tại

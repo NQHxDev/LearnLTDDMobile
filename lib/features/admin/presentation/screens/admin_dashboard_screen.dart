@@ -1,7 +1,10 @@
+import '../../../../core/constants/app_constants.dart';
 import 'package:flutter/material.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/widgets/appearance_settings_modal.dart';
 import '../../../../core/widgets/confirm_dialog.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
+import '../../../auth/presentation/screens/edit_profile_screen.dart';
 import '../../../auth/presentation/screens/login_screen.dart';
 import '../../../device/data/models/device_model.dart';
 import '../../../device/presentation/controllers/device_controller.dart';
@@ -65,7 +68,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       {
         'id': 4,
         'name': 'Trần Văn Kỹ Thuật',
-        'email': 'staff.kythuat@childdevices.vn',
+        'email': 'staff.kythuat@nguyenquanghung.vn',
         'role': 'STAFF',
         'isActive': true,
         'createdAt': '2026-10-22',
@@ -795,6 +798,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               ),
             ],
           ),
+        ),
+        IconButton(
+          tooltip: 'Cỡ chữ & Màu nền ứng dụng',
+          icon: const Icon(Icons.format_size_rounded, color: Colors.white),
+          onPressed: () => AppearanceSettingsModal.show(context),
         ),
         IconButton(
           tooltip: 'Đăng xuất',
@@ -1976,9 +1984,22 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      user?.email ?? 'admin@childdevices.vn',
+                      user?.email ?? 'admin@nguyenquanghung.vn',
                       style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 12.5),
                     ),
+                    if (user?.phoneNumber != null && user!.phoneNumber!.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          const Icon(Icons.phone_outlined, size: 13, color: Color(0xFFCBD5E1)),
+                          const SizedBox(width: 4),
+                          Text(
+                            user.phoneNumber!,
+                            style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 6),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -1994,10 +2015,45 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   ],
                 ),
               ),
+              IconButton(
+                icon: const Icon(Icons.edit_note_rounded, color: Colors.white, size: 28),
+                tooltip: 'Sửa đổi hồ sơ cá nhân',
+                onPressed: () async {
+                  final updated = await EditProfileScreen.navigate(context, widget.authController);
+                  if (updated == true && mounted) {
+                    setState(() {});
+                  }
+                },
+              ),
             ],
           ),
         ),
         const SizedBox(height: 20),
+
+        const Text(
+          'TÀI KHOẢN & HỒ SƠ QUẢN TRỊ',
+          style: TextStyle(
+            color: Color(0xFF94A3B8),
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1,
+          ),
+        ),
+        const SizedBox(height: 10),
+        InkWell(
+          onTap: () async {
+            final updated = await EditProfileScreen.navigate(context, widget.authController);
+            if (updated == true && mounted) {
+              setState(() {});
+            }
+          },
+          child: _buildSettingTile(
+            icon: Icons.manage_accounts_outlined,
+            title: 'Chỉnh sửa hồ sơ cá nhân & Đổi mật khẩu',
+            subtitle: 'Cập nhật Họ tên, SĐT liên hệ và Mật khẩu bảo mật máy chủ API',
+          ),
+        ),
+        const SizedBox(height: 16),
 
         const Text(
           'THIẾT LẬP MÁY CHỦ & BẢO MẬT',
@@ -2012,7 +2068,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         _buildSettingTile(
           icon: Icons.alt_route_rounded,
           title: 'Đường dẫn API Gateway',
-          subtitle: 'http://localhost:5057 / http://10.0.2.2:5057',
+          subtitle: '${AppConstants.baseUrl} (${AppConstants.isProduction ? 'Production' : 'Development'})',
         ),
         _buildSettingTile(
           icon: Icons.phone_disabled_rounded,

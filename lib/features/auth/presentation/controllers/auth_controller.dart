@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import '../../../../core/services/biometric_service.dart';
 import '../../../../core/storage/storage_service.dart';
 import '../../data/models/user_model.dart';
 import '../../data/services/auth_service.dart';
@@ -15,6 +16,7 @@ enum GoogleSignInStatus {
 class AuthController extends ChangeNotifier {
   final AuthService authService;
   final StorageService storageService;
+  final BiometricService biometricService;
   final GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: <String>['email', 'profile'],
   );
@@ -22,12 +24,18 @@ class AuthController extends ChangeNotifier {
   AuthController({
     AuthService? authService,
     StorageService? storageService,
+    BiometricService? biometricService,
   })  : authService = authService ?? AuthService(),
-        storageService = storageService ?? StorageService();
+        storageService = storageService ?? StorageService(),
+        biometricService = biometricService ?? BiometricService();
 
   User? currentUser;
   bool isLoading = false;
   bool isGoogleLoading = false;
+  bool isBiometricLoading = false;
+  bool isUpdatingProfile = false;
+  bool isBiometricSupported = false;
+  String? lastLoggedInEmail;
   bool lastGoogleIsNewUser = false;
   String? errorMessage;
 
@@ -269,11 +277,94 @@ class AuthController extends ChangeNotifier {
     }
   }
 
+  /// Lấy email đã đăng nhập trước đó để tự động điền vào form đăng nhập
+  Future<String?> getLastLoggedInEmail() async {
+    lastLoggedInEmail = await storageService.getLastEmail();
+    return lastLoggedInEmail;
+  }
+
+  /// Kiểm tra thiết bị có hỗ trợ sinh trắc học và có tài khoản đã đăng nhập trước đó hay không
+  Future<bool> checkBiometricAvailability() async {
+    isBiometricSupported = await biometricService.isBiometricSupported();
+    lastLoggedInEmail ??= await storageService.getLastEmail();
+    notifyListeners();
+    return isBiometricSupported;
+  }
+
+  /// Đăng nhập bằng vân tay (Bỏ qua OTP và mật khẩu)
+  Future<bool> loginWithBiometrics({String? email}) async {
+    isBiometricLoading = true;
+    errorMessage = null;
+    notifyListeners();
+
+    try {
+      final targetEmail = email?.trim().isNotEmpty == true
+          ? email!.trim()
+          : (lastLoggedInEmail ?? await storageService.getLastEmail());
+
+      if (targetEmail == null || targetEmail.isEmpty || !targetEmail.contains('@')) {
+        errorMessage = 'Chưa có thông tin tài khoản đăng nhập trước đó. Vui lòng đăng nhập bằng Email và OTP lần đầu.';
+        return false;
+      }
+
+      final authResult = await biometricService.authenticate(
+        localizedReason: 'Vui lòng quét vân tay để đăng nhập nhanh vào tài khoản $targetEmail',
+      );
+
+      if (!authResult.success) {
+        errorMessage = authResult.errorMessage ?? 'Xác thực vân tay không thành công';
+        return false;
+      }
+
+      final user = await authService.loginWithBiometrics(email: targetEmail);
+      currentUser = user;
+      lastLoggedInEmail = targetEmail;
+      return true;
+    } catch (e) {
+      errorMessage = _cleanErrorMessage(e.toString());
+      return false;
+    } finally {
+      isBiometricLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Sửa đổi thông tin hồ sơ cá nhân và đổi mật khẩu trên Server
+  Future<bool> updateProfile({
+    required String fullName,
+    String? phoneNumber,
+    String? currentPassword,
+    String? newPassword,
+  }) async {
+    isUpdatingProfile = true;
+    errorMessage = null;
+    notifyListeners();
+
+    try {
+      final updatedUser = await authService.updateProfile(
+        fullName: fullName,
+        phoneNumber: phoneNumber,
+        currentPassword: currentPassword,
+        newPassword: newPassword,
+      );
+
+      currentUser = updatedUser;
+      return true;
+    } catch (e) {
+      errorMessage = _cleanErrorMessage(e.toString());
+      return false;
+    } finally {
+      isUpdatingProfile = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> logout() async {
     try {
       await _googleSignIn.signOut();
     } catch (_) {}
     await authService.logout();
+    lastLoggedInEmail = await storageService.getLastEmail();
     currentUser = null;
     errorMessage = null;
     notifyListeners();

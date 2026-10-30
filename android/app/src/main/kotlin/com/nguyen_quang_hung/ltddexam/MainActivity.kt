@@ -16,7 +16,7 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import androidx.core.content.ContextCompat
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
@@ -24,7 +24,7 @@ import java.util.Locale
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
-class MainActivity : FlutterActivity() {
+class MainActivity : FlutterFragmentActivity() {
     private val locationChannelName = "com.nguyen_quang_hung.ltddexam/location"
     private val locationStreamChannelName = "com.nguyen_quang_hung.ltddexam/location_stream"
 
@@ -173,8 +173,8 @@ class MainActivity : FlutterActivity() {
                 if (isBetterLocation(location, bestCandidate)) {
                     bestCandidate = location
                 }
-                // Nếu đạt độ chính xác cao (<= 15m) từ GPS hoặc Fused, trả kết quả ngay lập tức
-                if (location.accuracy in 0.1f..15.0f && completed.compareAndSet(false, true)) {
+                // Nếu đạt độ chính xác tốt (<= 35m) từ GPS, Network hoặc Fused, trả kết quả ngay
+                if (location.accuracy in 0.1f..35.0f && completed.compareAndSet(false, true)) {
                     try {
                         lm.removeUpdates(this)
                     } catch (_: Exception) {}
@@ -190,11 +190,11 @@ class MainActivity : FlutterActivity() {
 
         try {
             for (provider in providers) {
-                lm.requestLocationUpdates(provider, 300L, 0.0f, tempListener, Looper.getMainLooper())
+                lm.requestLocationUpdates(provider, 200L, 0.0f, tempListener, Looper.getMainLooper())
             }
         } catch (_: Exception) {}
 
-        // Chờ tối đa 2500ms để khóa vệ tinh GPS chuẩn nhất rồi trả về ứng viên tốt nhất
+        // Chờ tối đa 4000ms để bắt tín hiệu vệ tinh GPS / mạng rồi trả về ứng viên tốt nhất
         mainHandler.postDelayed({
             if (completed.compareAndSet(false, true)) {
                 try {
@@ -212,7 +212,7 @@ class MainActivity : FlutterActivity() {
                     )
                 }
             }
-        }, 2500L)
+        }, 4000L)
     }
 
     @SuppressLint("MissingPermission")

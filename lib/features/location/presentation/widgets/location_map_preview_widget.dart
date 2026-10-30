@@ -453,7 +453,7 @@ class _LocationMapPreviewWidgetState extends State<LocationMapPreviewWidget>
               url,
               fit: BoxFit.cover,
               headers: const {
-                'User-Agent': 'ChildDevicesParentApp/1.0',
+                'User-Agent': 'NguyenQuangHungApp/1.0',
               },
               errorBuilder: (_, _, _) => const SizedBox.shrink(),
             ),

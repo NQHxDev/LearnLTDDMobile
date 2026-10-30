@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/navigation/role_router.dart';
 import '../../../../core/utils/validators.dart';
+import '../../../../core/widgets/appearance_settings_modal.dart';
 import '../../../../core/widgets/google_sign_in_button.dart';
 import '../controllers/auth_controller.dart';
 import 'register_screen.dart';
@@ -38,6 +39,22 @@ class _LoginScreenState extends State<LoginScreen> {
   Timer? _resendTimer;
   int _countdown = 60;
   bool _canResend = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedEmailAndCheckBiometrics();
+  }
+
+  Future<void> _loadSavedEmailAndCheckBiometrics() async {
+    final savedEmail = await widget.authController.getLastLoggedInEmail();
+    if (savedEmail != null && savedEmail.isNotEmpty && mounted) {
+      setState(() {
+        _emailController.text = savedEmail;
+      });
+    }
+    await widget.authController.checkBiometricAvailability();
+  }
 
   @override
   void dispose() {
@@ -280,6 +297,82 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  /// Đăng nhập nhanh bằng vân tay: bỏ qua OTP và mật khẩu
+  Future<void> _handleBiometricLogin() async {
+    FocusScope.of(context).unfocus();
+
+    final inputEmail = _emailController.text.trim();
+    final emailToUse = inputEmail.isNotEmpty
+        ? inputEmail
+        : widget.authController.lastLoggedInEmail;
+
+    if (emailToUse == null || emailToUse.isEmpty || !emailToUse.contains('@')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: AppColors.warning,
+          content: Row(
+            children: [
+              Icon(Icons.info_outline_rounded, color: Colors.white),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text('Vui lòng nhập Email hoặc đăng nhập lần đầu để kích hoạt vân tay'),
+              ),
+            ],
+          ),
+        ),
+      );
+      return;
+    }
+
+    final success = await widget.authController.loginWithBiometrics(
+      email: emailToUse,
+    );
+
+    if (!mounted) return;
+
+    if (success) {
+      final roleLabel =
+          widget.authController.currentUser?.roleType.displayName ?? 'USER';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: AppColors.success,
+          content: Row(
+            children: [
+              const Icon(Icons.fingerprint_rounded, color: Colors.white),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Đăng nhập bằng vân tay thành công: $roleLabel',
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      // Điều hướng thẳng tới màn hình trang chủ theo Role (không cần qua bước OTP)
+      RoleRouter.navigateToRoleHome(context, widget.authController);
+    } else {
+      final errorMsg = widget.authController.errorMessage ??
+          'Xác thực vân tay không thành công';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: AppColors.error,
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline_rounded, color: Colors.white),
+              const SizedBox(width: 10),
+              Expanded(child: Text(errorMsg)),
+            ],
+          ),
+        ),
+      );
+    }
+  }
+
   void _showForgotPasswordDialog() {
     final resetEmailController =
         TextEditingController(text: _emailController.text.trim());
@@ -358,7 +451,7 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       },
       child: Scaffold(
-        backgroundColor: const Color(0xFFF1F5F9),
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         body: Stack(
           children: [
             // Background Gradient Curve Header
@@ -380,6 +473,28 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               child: Stack(
                 children: [
+                  Positioned(
+                    top: 10,
+                    right: 12,
+                    child: SafeArea(
+                      child: IconButton(
+                        tooltip: 'Tùy chỉnh Cỡ chữ & Màu nền',
+                        icon: Container(
+                          padding: const EdgeInsets.all(7),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withAlpha(50),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.format_size_rounded,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                        ),
+                        onPressed: () => AppearanceSettingsModal.show(context),
+                      ),
+                    ),
+                  ),
                   Positioned(
                     top: -40,
                     right: -30,
@@ -430,7 +545,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             const SizedBox(height: 12),
                             const Text(
-                              'Child Devices',
+                              'NguyenQuangHung',
                               style: TextStyle(
                                 color: Colors.white,
                                 fontSize: 26,
@@ -639,64 +754,161 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           const SizedBox(height: 22),
 
-          // Submit Button -> Gửi OTP đăng nhập
+          // Hàng nút Đăng nhập: Nút Tiếp tục OTP + Ô Sử dụng Vân tay bên cạnh
           ListenableBuilder(
             listenable: widget.authController,
             builder: (context, _) {
               final loading = widget.authController.isLoading;
-              return Container(
-                width: double.infinity,
-                height: 52,
-                decoration: BoxDecoration(
-                  gradient: AppColors.primaryGradient,
-                  borderRadius: BorderRadius.circular(14),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.primary.withAlpha(90),
-                      blurRadius: 16,
-                      offset: const Offset(0, 6),
-                    ),
-                  ],
-                ),
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.transparent,
-                    shadowColor: Colors.transparent,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  onPressed: loading ? null : _handleProceedToOtp,
-                  child: loading
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.4,
-                            valueColor:
-                                AlwaysStoppedAnimation<Color>(Colors.white),
+              final biometricLoading = widget.authController.isBiometricLoading;
+              final anyLoading = loading || biometricLoading;
+              final hasSavedAccount = widget.authController.lastLoggedInEmail != null &&
+                  widget.authController.lastLoggedInEmail!.isNotEmpty;
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      // Nút Tiếp tục & Nhận mã OTP
+                      Expanded(
+                        child: Container(
+                          height: 52,
+                          decoration: BoxDecoration(
+                            gradient: AppColors.primaryGradient,
+                            borderRadius: BorderRadius.circular(14),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.primary.withAlpha(90),
+                                blurRadius: 16,
+                                offset: const Offset(0, 6),
+                              ),
+                            ],
                           ),
-                        )
-                      : Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: const [
-                            Text(
-                              'Tiếp tục & Nhận mã OTP',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.transparent,
+                              shadowColor: Colors.transparent,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
                               ),
                             ),
-                            SizedBox(width: 8),
-                            Icon(
-                              Icons.arrow_forward_rounded,
-                              size: 18,
-                              color: Colors.white,
-                            ),
-                          ],
+                            onPressed: anyLoading ? null : _handleProceedToOtp,
+                            child: loading
+                                ? const SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.4,
+                                      valueColor:
+                                          AlwaysStoppedAnimation<Color>(Colors.white),
+                                    ),
+                                  )
+                                : Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: const [
+                                      Text(
+                                        'Tiếp tục & OTP',
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                      SizedBox(width: 6),
+                                      Icon(
+                                        Icons.arrow_forward_rounded,
+                                        size: 18,
+                                        color: Colors.white,
+                                      ),
+                                    ],
+                                  ),
+                          ),
                         ),
-                ),
+                      ),
+
+                      const SizedBox(width: 12),
+
+                      // Ô sử dụng vân tay bên cạnh nút đăng nhập
+                      Tooltip(
+                        message: 'Đăng nhập nhanh bằng vân tay (Bỏ qua OTP & Mật khẩu)',
+                        child: Container(
+                          width: 52,
+                          height: 52,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: hasSavedAccount
+                                  ? AppColors.primary
+                                  : AppColors.primary.withAlpha(80),
+                              width: 1.6,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.primary.withAlpha(35),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Material(
+                            color: Colors.transparent,
+                            borderRadius: BorderRadius.circular(14),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(14),
+                              onTap: anyLoading ? null : _handleBiometricLogin,
+                              child: Center(
+                                child: biometricLoading
+                                    ? const SizedBox(
+                                        width: 22,
+                                        height: 22,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2.4,
+                                          valueColor:
+                                              AlwaysStoppedAnimation<Color>(
+                                            AppColors.primary,
+                                          ),
+                                        ),
+                                      )
+                                    : const Icon(
+                                        Icons.fingerprint_rounded,
+                                        color: AppColors.primary,
+                                        size: 32,
+                                      ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (hasSavedAccount) ...[
+                    const SizedBox(height: 8),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.check_circle_rounded,
+                            size: 13,
+                            color: AppColors.success,
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              'Đã nhận diện ${widget.authController.lastLoggedInEmail}. Chạm nút vân tay để đăng nhập nhanh!',
+                              style: const TextStyle(
+                                fontSize: 11.5,
+                                color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
               );
             },
           ),
